@@ -4,6 +4,7 @@ import random
 import traceback
 from threading import Thread
 from typing import List, Optional
+import pygetwindow as gw
 
 from agent import KEN_GREEN, KEN_RED, TextRobot, VisionRobot
 from agent.config import MODELS
@@ -17,6 +18,7 @@ from rich import print
 
 from agent.robot import Robot
 
+CHARACTERS = ['Alex', 'Twelve', 'Hugo', 'Sean', 'Makoto', 'Elena', 'Ibuki', 'Chun-Li', 'Dudley', 'Necro', 'Q', 'Oro', 'Urien', 'Remy', 'Ryu', 'Gouki', 'Yun', 'Yang', 'Ken', 'Gill']
 
 def generate_random_model(openai: bool = False, mistral: bool = True):
     models_available = []
@@ -39,6 +41,7 @@ class Player:
     model: str
     robot: Optional[Robot] = None
     temperature: float = 0.7
+    Characters = ['Alex', 'Twelve', 'Hugo', 'Sean', 'Makoto', 'Elena', 'Ibuki', 'Chun-Li', 'Dudley', 'Necro', 'Q', 'Oro', 'Urien', 'Remy', 'Ryu', 'Gouki', 'Yun', 'Yang', 'Ken', 'Gill']
 
     def verify_provider_name(self):
         if self.model.startswith("openai"):
@@ -53,9 +56,14 @@ class Player:
             assert (
                 os.environ.get("CEREBRAS_API_KEY") is not None
             ), "Cerebras API key not set"
+        if self.model.startswith("gemini"):
+            assert (
+                os.environ.get("GOOGLE_GEMINI_API_KEY") is not None
+            ), "Gemini API key not set"
 
 
 class Player1(Player):
+
     def __init__(
         self,
         nickname: str,
@@ -71,7 +79,7 @@ class Player1(Player):
         if robot_type == "vision":
             self.robot = VisionRobot(
                 action_space=None,
-                character="Ken",
+                character='Ken',
                 side=0,
                 character_color=KEN_RED,
                 model=self.model,
@@ -84,7 +92,7 @@ class Player1(Player):
         else:
             self.robot = TextRobot(
                 action_space=None,
-                character="Ken",
+                character='Ken',
                 side=0,
                 character_color=KEN_RED,
                 ennemy_color=KEN_GREEN,
@@ -109,11 +117,11 @@ class Player2(Player):
         self.nickname = nickname
         self.model = model
         self.robot_type = robot_type
-        self.temperature = temperature
+        self.temperature = temperature    
         if robot_type == "vision":
             self.robot = VisionRobot(
                 action_space=None,
-                character="Ken",
+                character='Ken',
                 side=1,
                 model=self.model,
                 character_color=KEN_GREEN,
@@ -125,7 +133,7 @@ class Player2(Player):
         else:
             self.robot = TextRobot(
                 action_space=None,
-                character="Ken",
+                character='Ken',
                 side=1,
                 character_color=KEN_GREEN,
                 ennemy_color=KEN_RED,
@@ -196,6 +204,7 @@ class Game:
         outfits: List[int] = [1, 3],
         frame_shape: List[int] = [0, 0, 0],
         seed: int = 42,
+        device_idx: int = 0,
     ):
         """_summary_
 
@@ -218,19 +227,24 @@ class Game:
         self.settings = self._init_settings()
         self.env = self._init_env(self.settings)
         self.observation, self.info = self.env.reset(seed=self.seed)
-        if player_1 is not None:
-            self.player_1 = player_1
-        else:
+        self.device_idx = device_idx
+
+        ### Uncomment if using 2 LLMs
+        # if player_1 is not None:
+        #     self.player_1 = player_1
+        # else:
+
             # If player 1 is not provided, we will use the controller
             # The human player will be able to play with the controller
-            from diambra.arena.utils.controller import get_diambra_controller
+        from diambra.arena.utils.controller import get_diambra_controller
 
-            self.player_1 = None
-            self.controller = get_diambra_controller(
-                self.env.unwrapped.get_actions_tuples(),
+        self.player_1 = None
+        self.controller = get_diambra_controller(
+            self.env.unwrapped.get_actions_tuples(),
+            device_idx=self.device_idx,
                 # force_configure=True,
-            )
-            self.controller.start()
+        )
+        self.controller.start()
         self.player_2 = player_2
 
     def _init_settings(self) -> EnvironmentSettingsMultiAgent:
@@ -310,38 +324,48 @@ class Game:
             }
             self.reward = 0.0
 
-            if self.player_1 is not None:
-                self.player_1.robot.observe(self.observation, {}, 0.0)
+            ### Uncomment if using 2 LLMs
+            # if self.player_1 is not None:
+            #     self.player_1.robot.observe(self.observation, {}, 0.0)
 
             self.player_2.robot.observe(self.observation, {}, 0.0)
             # Initialize the episode
             episode = Episode(player_1=self.player_1, player_2=self.player_2)
             # Start the threads that make API calls
-            if self.player_1 is not None:
-                player1_thread = PlanAndActPlayer1(game=self, episode=episode)
-                player1_thread.start()
+
+            ### Uncomment if using 2 LLMs
+            # if self.player_1 is not None:
+            #     player1_thread = PlanAndActPlayer1(game=self, episode=episode)
+            #     player1_thread.start()
+
             player2_thread = PlanAndActPlayer2(game=self, episode=episode)
             player2_thread.start()
 
             while True:
                 # Render the game
                 if self.render:
+                    # print(dir(self.env.unwrapped))
                     self.env.render()
+                    windows = gw.getWindowsWithTitle("Diambra")
+                    if windows:
+                        game_window = windows[0]
+                        game_window.maximize()
 
                 actions = self.actions
 
-                if self.player_1 is None:
+                ### Uncomment if using 2 LLMs
+                # if self.player_1 is None:
                     # If player 1 is not provided, we use the controller
-                    try:
+                try:
                         # On MacOS we need to install pyobjc
                         # pip install pyobjc
                         # https://stackoverflow.com/questions/76434535/attributeerror-super-object-has-no-attribute-init
 
                         controller_actions = self.controller.get_actions()
-                        actions["agent_1"] = (
+                        actions["agent_0"] = (
                             controller_actions[0] + controller_actions[1]
                         )
-                    except Exception as e:
+                except Exception as e:
                         print(e)
 
                 if "agent_0" not in actions:
@@ -364,22 +388,39 @@ class Game:
                 p2_wins = observation["P2"]["wins"][0]
 
                 if p1_wins == 1 or p2_wins == 1:
-                    if self.player_1 is not None:
-                        player1_thread.running = False
+                    
+                    win_statement = ""
+                    ### Uncomment if using 2 LLMs
+                    # if self.player_1 is not None:
+                    #     player1_thread.running = False
+
                     player2_thread.running = False
                     episode.player_1_won = p1_wins == 1
                     if episode.player_1_won:
-                        print(
-                            f"[red] Player1 {self.player_1.robot.model} '{self.player_1.nickname}' won!"
-                        )
+                        
+                        ### Uncomment if using 2 LLMs
+                        # if self.player_1 is None:
+
+                            print(
+                                f"[red] Player1 won!"
+                            )
+                            win_statement = "Player1 won!"
+
+                        ### Uncomment if using 2 LLMs
+                        # else:
+                        #     print(
+                        #         f"[red] Player1 {self.player_1.robot.model} '{self.player_1.nickname}' won!"
+                        #     )
+
                     else:
                         print(
                             f"[green] Player2 {self.player_2.robot.model} {self.player_2.nickname} won!"
                         )
+                        win_statement = f"Player2 {self.player_2.robot.model} {self.player_2.nickname} won!"
                     episode.save()
                     self.env.close()
                     ##TODO: Replace the line bellow by pass
-                    return episode.player_1_won
+                    return win_statement
         except Exception as e:
             # self.env.close()
             print(f"Exception: {e}")

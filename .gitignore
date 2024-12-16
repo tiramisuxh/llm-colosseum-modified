@@ -2,7 +2,7 @@ doapp.zip
 __pycache__
 .env
 test.py
-myenv/
+llm/
 eval/diambra
 
 results.csv

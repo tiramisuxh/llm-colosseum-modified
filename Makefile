@@ -1,5 +1,5 @@
 run:
-	diambra -r ~/.diambra/roms run -l python3 script.py
+	diambra -r C:\Users\su_xi\.diambra\roms run -l python script.py
 
 demo:
 	diambra -r ~/.diambra/roms run -l python3 demo.py && python3 result.py
